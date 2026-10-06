@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+dist/
+build/
+*.png
+*.jpg
+outslurm/
+h5_filelist.txt
+*.csv
+.DS_Store
