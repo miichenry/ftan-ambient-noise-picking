@@ -11,3 +11,7 @@ outslurm/
 h5_filelist.txt
 *.csv
 .DS_Store
+*.RESP
+RESP.*
+*.pz
+*.pdf

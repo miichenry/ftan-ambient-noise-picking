@@ -4,7 +4,11 @@ Automated group-velocity dispersion measurement from ambient-noise cross-correla
 
 ## Method
 
-This workflow implements a two-stage FTAN following Levshin et al. (1989, 1992) and the multi-component Rayleigh-wave mode-separation of Nayak & Thurber (2020):
+This workflow implements:
+
+### Group velocity (FTAN)
+
+Two-stage FTAN following Levshin et al. (1989, 1992) and the multi-component Rayleigh-wave mode-separation of Nayak & Thurber (2020):
 
 1. **Basic FTAN** -- A bank of narrowband Gaussian filters (log-spaced in period) is applied to the symmetrized cross-correlation. For each filter, the Hilbert envelope is mapped from lag time to group velocity (`vg = dist/t`), producing a period-vs-group-velocity image whose bright ridge is the dispersion curve.
 
@@ -18,6 +22,20 @@ This workflow implements a two-stage FTAN following Levshin et al. (1989, 1992) 
 
 4. **Diagnostic plots** -- Each station pair produces a multi-panel figure showing the full FTAN image, the valid region, the far-field boundary, raw picks, QC-filtered picks, and the final cleaned dispersion curve.
 
+### Phase velocity (AKI zero-crossing method)
+
+Phase-velocity measurement using the Aki (1957) / Boschi et al. (2013) spectral zero-crossing method, with a two-pass workflow:
+
+1. **Pass 1** (inside `pick_dispersion.py`) -- For each pair, the cross-spectrum of the mode-separated G_LR0 waveform is computed. Zero crossings of Re[cross-spectrum] are identified; these correspond to the zeros of J_0(2πf·d/c), from which candidate phase velocities are extracted. When the group-velocity dispersion curve unambiguously selects a single branch, the phase curve is written immediately.
+
+2. **Pass 2** (`step0_phase_pass2.py`) -- After all SLURM tasks finish, a median reference curve `c_ref` is built from the unambiguous pass-1 results. Pairs that were ambiguous (multiple valid branches) are then re-processed using `c_ref` to resolve the correct branch. This two-pass approach maximizes the number of pairs with reliable phase-velocity measurements.
+
+Key features:
+- Branch selection guided by group-velocity consistency (c > vg constraint)
+- Smoothing via Savitzky-Golay filter on the real spectrum before zero-crossing detection
+- Edge-point trimming to remove biased measurements at band edges
+- Diagnostic AKI figures showing the zero-crossing pattern and selected branch
+
 ## File Overview
 
 | File | Description |
@@ -25,9 +43,12 @@ This workflow implements a two-stage FTAN following Levshin et al. (1989, 1992) 
 | `config.py` | All paths and parameters -- **edit this first** |
 | `FTAN_refactored.py` | Core FTAN engine (Gaussian filter bank, envelope, group-velocity mapping) |
 | `robust_dispersion_clean.py` | Automatic mode-jump detection and removal |
-| `pick_dispersion.py` | Main per-pair processing: read H5, FTAN, pick, plot, write CSV |
+| `pick_dispersion.py` | Main per-pair processing: read H5, FTAN, pick, plot, write CSV, AKI pass 1 |
+| `phase_velocity.py` | AKI phase-velocity engine (zero-crossing, branch selection, reference curve) |
+| `read_h5.py` | H5 reader utility for NoisePy cross-correlation files |
 | `create_filelist.sh` | Generate the list of H5 files for the SLURM array job |
 | `run_picking.slurm` | SLURM array job script |
+| `step0_phase_pass2.py` | AKI pass 2: build reference curve, rescue ambiguous pairs |
 | `step1_merge_picks.py` | Merge all per-pair CSVs into one table with QC filtering |
 | `step2_plot_histograms.py` | Plot pick-density histograms per component |
 
@@ -69,7 +90,21 @@ Each array task processes ~100 station pairs. Output goes to:
 - `dispersion_csv/` -- one CSV per pair with all picked periods, velocities, SNR, etc.
 - `ftan_figures/` -- one diagnostic PNG per pair
 
-### 4. Merge picks
+### 4. Phase-velocity pass 2
+
+After all SLURM tasks finish, run the second AKI pass to rescue ambiguous pairs:
+
+```bash
+python step0_phase_pass2.py
+```
+
+This builds a median reference curve from unambiguous pass-1 results, then re-runs AKI on ambiguous pairs using the reference to resolve branches. Output goes to:
+- `disp_phase/` -- phase-velocity dispersion files (one per pair)
+- `cache_aki/` -- cached AKI results for both passes
+- `fig_aki/` -- diagnostic AKI figures (up to `MAX_AKI_FIGS`)
+- `c_ref.dat` -- the median reference phase-velocity curve
+
+### 5. Merge picks
 
 After all SLURM tasks finish:
 
@@ -79,7 +114,7 @@ python step1_merge_picks.py
 
 Produces a single consolidated CSV in `merged/` with SNR and distance/wavelength QC applied.
 
-### 5. Plot histograms
+### 6. Plot histograms
 
 ```bash
 python step2_plot_histograms.py
@@ -142,6 +177,8 @@ Each pair produces a 7-panel figure showing all processed components:
 
 ## References
 
+- Aki, K. (1957). Space and time spectra of stationary stochastic waves, with special reference to microtremors. Bull. Earthq. Res. Inst., 35, 415-456.
+- Boschi, L., et al. (2013). On measuring surface wave phase velocity from station-station cross-correlation of ambient signal. GJI, 192, 346-358.
 - Levshin, A. L., et al. (1989). Seismic Surface Waves in a Laterally Inhomogeneous Earth. Kluwer.
 - Levshin, A. L., et al. (1992). Making and validating broadband surface wave dispersion measurements. Ann. Geofis., 35, 17-27.
 - Nayak, A. & Thurber, C. H. (2020). Recovering multi-component Rayleigh-wave group velocities from ambient noise cross-correlations. GRL, 47.

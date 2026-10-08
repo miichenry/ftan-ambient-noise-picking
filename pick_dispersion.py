@@ -31,6 +31,8 @@ import matplotlib.pyplot as plt
 
 from FTAN_refactored import calc_ftan
 from robust_dispersion_clean import remove_dispersion_jumps
+from phase_velocity import (measure_phase_velocity_aki, save_dispersion,
+                            plot_aki, trim_edge_outliers)
 import config
 
 warnings.filterwarnings('ignore')
@@ -458,7 +460,7 @@ def process_pair(h5_file):
                     'pick_method': 'ftan_argmax',
                 })
 
-        # --- Mode-separated: G_LR0 (fundamental) ---
+        # --- Mode-separated: G_LR0 (fundamental) and G_LR1 (1st higher) ---
         has_all_4 = all(c in ccf['data'] for c in ['ZZ', 'RR', 'ZR', 'RZ'])
         if has_all_4:
             ZZ_s = get_half(ccf['data']['ZZ'], side=lag_type)
@@ -503,6 +505,70 @@ def process_pair(h5_file):
                         'component': gname,
                         'pick_method': 'ftan_argmax',
                     })
+
+                # ── AKI phase velocity (pass 1) on G_LR0 only ──────────────
+                if gname == 'G_LR0' and T_pk.size >= 2:
+                    os.makedirs(config.OUTPUT_PHASE, exist_ok=True)
+                    os.makedirs(config.OUTPUT_CACHE, exist_ok=True)
+                    os.makedirs(config.OUTPUT_FIGS_AKI, exist_ok=True)
+
+                    # For AKI: use group curve WITHOUT far-field cut but WITH
+                    # SNR filtering, to keep the band as wide as possible for
+                    # branch selection (see phase_velocity module docstring).
+                    snr_at_raw = np.interp(T_pk, T_plot[::-1], snr_db[::-1])
+                    good_snr = snr_at_raw >= config.AKI_SNR_THRESHOLD_DB
+                    T_aki, vg_aki = clean_group_curve(
+                        T_pk[good_snr], vg_pk[good_snr], dist, far_field=False)
+
+                    if T_aki.size >= 2:
+                        # Cache for pass 2 (never redo FTAN)
+                        np.savez(os.path.join(config.OUTPUT_CACHE, f'{pair_name}.npz'),
+                                 T_vg=T_aki, vg=vg_aki, distance=dist,
+                                 h5_file=h5_file, sta1=sta1, sta2=sta2)
+
+                        aki_kw = dict(
+                            dist_km=dist,
+                            max_lag_s=config.AKI_LAG_FACTOR * dist / config.VG_MIN,
+                            c_min=config.AKI_C_MIN, c_max=config.AKI_C_MAX)
+
+                        res = measure_phase_velocity_aki(
+                            G_LR0, dt=dt, T_vg=T_aki, vg=vg_aki,
+                            verbose=True, **aki_kw)
+
+                        if res['ok']:
+                            # Write phase curve (trim biased edge points)
+                            f_w, c_w, _ = trim_edge_outliers(res['f'], res['c'])
+                            if f_w.size >= 2:
+                                save_dispersion(
+                                    os.path.join(config.OUTPUT_PHASE,
+                                                 f'disp_phase_{sta1}_{sta2}_td.dat'),
+                                    1.0 / f_w, c_w, dist)
+                                print(f'  Phase velocity: branch m={res["branch"]}, '
+                                      f'{f_w.size} points written')
+                        elif res.get('ambiguous'):
+                            print(f'  AKI pass 1: ambiguous (deferred to pass 2)')
+                        else:
+                            print(f'  AKI pass 1: no valid branch found')
+
+                        # Save slim result for pass-2 reference curve
+                        slim = {'pair': pair_name, 'ok': bool(res.get('ok')),
+                                'ambiguous': bool(res.get('ambiguous')),
+                                'f': np.asarray(res.get('f', []), dtype=float),
+                                'c': np.asarray(res.get('c', []), dtype=float)}
+                        np.savez(os.path.join(config.OUTPUT_CACHE,
+                                              f'{pair_name}_aki.npz'), **slim)
+
+                        # AKI diagnostic figure (limited count)
+                        n_aki_figs = len([f for f in os.listdir(config.OUTPUT_FIGS_AKI)
+                                          if f.endswith('.png')]) if os.path.isdir(config.OUTPUT_FIGS_AKI) else 0
+                        if n_aki_figs < config.MAX_AKI_FIGS:
+                            fig_aki = plot_aki(res, T_vg=T_aki, vg=vg_aki)
+                            fig_aki.savefig(os.path.join(config.OUTPUT_FIGS_AKI,
+                                                         f'aki_{pair_name}.png'), dpi=110)
+                            plt.close(fig_aki)
+                    else:
+                        print(f'  AKI skipped: too few group-velocity picks '
+                              f'({good_snr.sum()} above {config.AKI_SNR_THRESHOLD_DB} dB)')
 
         # --- TT component (Love wave) if available ---
         if 'TT' in ccf['data']:
