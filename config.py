@@ -46,7 +46,7 @@ TMAX = 5.0
 
 # Group-velocity axis (km/s)
 VG_MIN = 0.2
-VG_MAX = 4.0
+VG_MAX = 2.0
 N_VG = 500
 
 # Gaussian filter width parameters (alpha1 for basic FTAN, alpha2 for floating)
