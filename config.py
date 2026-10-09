@@ -14,7 +14,7 @@ PROJECT_ROOT = '/srv/beegfs/scratch/users/h/henrymi/project/GSE'
 
 # Directory containing stacked cross-correlation H5 files (one subdirectory per
 # source station, each containing .h5 files for every pair).
-CC_PATH = os.path.join(PROJECT_ROOT, 'noisepy/GSE_STACK/CFF_phase_only_rma/linear')
+CC_PATH = os.path.join(PROJECT_ROOT, 'noisepy/GSE_STACK/CFF_phase_only_one_bit/pws')
 
 # StationXML file with coordinates for all stations
 STATIONXML = os.path.join(PROJECT_ROOT, 'metadata/SS_GSE_all_stations.xml')
@@ -32,7 +32,7 @@ OUTPUT_MERGED = os.path.join(OUTPUT_ROOT, 'merged')
 NETWORK = 'SS'
 
 # Stack type inside the H5 file (key under AuxiliaryData/)
-STACK_TYPE = 'Allstack_linear'
+STACK_TYPE = 'Allstack_pws'
 
 # ============================================================================
 # FTAN PARAMETERS
@@ -45,7 +45,7 @@ TMIN = 0.2
 TMAX = 5.0
 
 # Group-velocity axis (km/s)
-VG_MIN = 0.5
+VG_MIN = 0.2
 VG_MAX = 4.0
 N_VG = 500
 

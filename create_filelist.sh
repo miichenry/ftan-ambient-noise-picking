@@ -2,7 +2,7 @@
 # Generate a list of all H5 files to process.
 # Run this once before submitting the SLURM array job.
 
-CC_PATH="/srv/beegfs/scratch/users/h/henrymi/project/GSE/noisepy/GSE_STACK/CFF_phase_only_rma/linear"
+CC_PATH="/srv/beegfs/scratch/users/h/henrymi/project/GSE/noisepy/GSE_STACK/CFF_phase_only_one_bit/pws"
 OUTFILE="/home/users/h/henrymi/ftan-ambient-noise-picking/h5_filelist.txt"
 
 find "$CC_PATH" -name "*.h5" -type f | sort > "$OUTFILE"
